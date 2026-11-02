@@ -29,14 +29,8 @@ export class Evals extends EnginePart {
 
   /**
    * Expire a Thread's Eval past its deadline (see `expire`), unless processing is paused: then the Eval notes when the
-   * processing pause began, and once processing resumes its deadline moves forward by the pause's length.
-   *
-   * The deadline applies whether or not the candidate reached the assessor's Session. It used to require `delivered`,
-   * on the theory that an assessor that had not started yet should not be killed -- but that turned "the assessor never
-   * takes the candidate" into an Eval that waits forever: measured on 2026-11-02, `github:12` held `evaluating` with
-   * `delivered` unset for 13+ minutes against a 120 s deadline, so no Decision was ever recorded and nothing showed as
-   * unavailable. An undelivered Eval now expires at its deadline like any other; `delivered()` still pushes the
-   * deadline forward the moment the candidate is taken, so a slow start is not punished.
+   * processing pause began, and once processing resumes its deadline moves forward by the pause's length. An Eval whose
+   * candidate has not reached the assessor's Session does not expire, so a slow assessor start is not killed.
    */
   due(thread: Thread, policy: Policy): void {
     const evaluation = thread.evaluating
@@ -46,7 +40,7 @@ export class Evals extends EnginePart {
     else if (evaluation.pausedAt) {
       evaluation.deadline = new Date(Date.parse(evaluation.deadline) + Date.parse(now) - Date.parse(evaluation.pausedAt)).toISOString()
       delete evaluation.pausedAt
-    } else if (evaluation.deadline <= now) { this.expire(thread); return }
+    } else if (evaluation.delivered && evaluation.deadline <= now) { this.expire(thread); return }
     else return
     this.repo.threads.save(thread)
   }
@@ -63,15 +57,13 @@ export class Evals extends EnginePart {
    * An Eval past its deadline queues its Triggers again for a fresh Eval, up to `REQUEUES` times in a row, so a busy
    * assessor does not drop requests; after that it is recorded unavailable.
    *
-   * The recorded reason carries whether the candidate ever reached the assessor (`delivered: 'never'` means the
-   * assessor never took it -- a stuck or unstarted eval Session, not a slow one), because that distinction was
-   * invisible before: a hung Eval left no trace and health still said "No unavailable Eval in the last hour".
+   * The recorded reason carries how many deadline windows the assessor burned (`attempts`), which the Decision used to
+   * omit: a request that timed out after three full windows looked exactly like one that timed out once.
    */
   private expire(thread: Thread): void {
     const expired = (thread.expired ?? 0) + 1
     if (expired > REQUEUES) {
-      const delivered = thread.evaluating!.delivered ? 'yes' : 'never'
-      this.finish(thread, thread.evaluating!, { kind: 'unavailable', reason: [{ code: 'timeout', values: { delivered } }] })
+      this.finish(thread, thread.evaluating!, { kind: 'unavailable', reason: [{ code: 'timeout', values: { attempts: String(expired) } }] })
       return
     }
     const { id, triggerIds } = thread.evaluating!

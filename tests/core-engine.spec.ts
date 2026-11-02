@@ -158,39 +158,30 @@ describe('eval', () => {
     h.engine.evaluateDue()
     expect(h.requests.map(candidate => candidate.thread.key)).toEqual(['chat:A', 'chat:B'])
   })
-  it('expires an Eval the assessor never takes, and one it takes but never answers, then records it unavailable', async () => {
+  it('counts an Eval\'s deadline from its delivery, queues its Triggers again twice when it expires, then records it unavailable', async () => {
     const h = harness()
     h.engine.receive(trigger('1')); h.pump()
-    // A candidate the assessor's Session never takes still expires at its own deadline: waiting forever left the
-    // Thread with no Decision and nothing marked unavailable.
-    h.tick(61); h.pump()
+    // A candidate the assessor's Session has not taken does not expire.
+    h.tick(600); h.pump()
+    expect(h.engine.candidate('1')?.evalId).toBe(h.requests[0]!.evalId)
+    const deliver = () => { h.engine.candidateDelivered(h.requests.at(-1)!.evalId) }
+    deliver()
+    h.tick(59); h.pump()
+    expect(h.requests).toHaveLength(1)
+    // Expired, it records nothing and queues the Trigger for a fresh Eval, twice.
+    h.tick(2); h.pump()
     expect(h.repo.decisions.byThread('chat:t1')).toEqual([])
     expect(h.assessor.release).toHaveBeenCalledWith(h.requests[0]!.evalId)
     expect(h.requests.map(item => item.triggers.map(each => each.id))).toEqual([['1'], ['1']])
-    expect(h.engine.candidate('1')?.evalId).toBe(h.requests[1]!.evalId)
-    const deliver = () => { h.engine.candidateDelivered(h.requests.at(-1)!.evalId) }
-    // Delivered, its deadline counts from the delivery, not from when the Eval started.
-    deliver()
-    h.tick(59); h.pump()
-    expect(h.requests).toHaveLength(2)
-    h.tick(2); h.pump()
+    deliver(); h.tick(61); h.pump()
     expect(h.requests).toHaveLength(3)
-    // The third expiry is recorded unavailable, and says the assessor did take this one.
+    // The third expiry is recorded unavailable, and says how many deadline windows the assessor burned.
     deliver(); h.tick(61); h.pump()
     expect(h.repo.decisions.byThread('chat:t1')).toEqual([expect.objectContaining({ kind: 'unavailable',
-      reason: [{ code: 'timeout', values: { delivered: 'yes' } }] })])
+      reason: [{ code: 'timeout', values: { attempts: '3' } }] })])
     expect(h.repo.threads.get('chat:t1')).toMatchObject({ pending: [] })
     expect(h.repo.threads.get('chat:t1')).not.toHaveProperty('evaluating')
     expect(h.repo.threads.get('chat:t1')).not.toHaveProperty('expired')
-  })
-  it('records an Eval the assessor never took as unavailable, saying it was never delivered', async () => {
-    const h = harness()
-    h.engine.receive(trigger('1')); h.pump()
-    // Three windows pass without the assessor ever taking a candidate: two requeues, then unavailable.
-    h.tick(61); h.pump(); h.tick(61); h.pump(); h.tick(61); h.pump()
-    expect(h.repo.decisions.byThread('chat:t1')).toEqual([expect.objectContaining({ kind: 'unavailable',
-      reason: [{ code: 'timeout', values: { delivered: 'never' } }] })])
-    expect(h.repo.threads.get('chat:t1')).not.toHaveProperty('evaluating')
   })
 })
 describe('subscription fan-out', () => {
