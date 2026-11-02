@@ -67,10 +67,11 @@ export class Engine {
   // The clock
 
   /**
-   * Requeues overdue Evals up to `REQUEUES` times before recording `unavailable` (undelivered Evals never expire), starts the
-   * Evals of Threads whose queued Triggers wait, and resumes ended tickets a person's message reached while processing was
-   * paused. While processing is paused, nothing expires: each Eval in progress notes when the pause began, and its deadline
-   * moves forward by the pause's length once processing resumes. Each Eval and each ticket update takes one transaction.
+   * Requeues overdue Evals up to `REQUEUES` times before recording `unavailable` (an undelivered Eval expires too: an
+   * assessor that never takes a candidate must not leave the Thread waiting forever), starts the Evals of Threads whose
+   * queued Triggers wait, and resumes ended tickets a person's message reached while processing was paused. While
+   * processing is paused, nothing expires: each Eval in progress notes when the pause began, and its deadline moves
+   * forward by the pause's length once processing resumes. Each Eval and each ticket update takes one transaction.
    */
   evaluateDue(): void {
     const policy = this.options.policy()
