@@ -299,7 +299,7 @@ export async function pollRound(ctx: SourceContext, signal?: AbortSignal): Promi
  *
  * GitHub's notification list lags behind the event that produced it, so a poll can come back with nothing
  * while the cursor still moves forward past the event — and that notification is then never read. Two probes
- * lost an Issue body this way: the Issue existed in `notifications` at 10:20:37Z while `github-since` had
+ * lost an Issue body this way: the Issue existed in `notifications` at 10:20:37Z while the stored cursor had
  * already been advanced to 10:21:31Z.
  *
  * Re-listing a window is safe because Trigger IDs are deterministic (`key('github-issue', number)`,
