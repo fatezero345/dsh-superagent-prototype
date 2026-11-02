@@ -1,2 +1,3 @@
 *.sh text eol=lf
 *.cmd text eol=crlf
+scripts/dsh-superagent text eol=lf
