@@ -35,6 +35,9 @@ import { preview, readable } from '../src/app/views/text.ts'
 import { decisionList, search, threadDetail, threadList } from '../src/app/views/threads.ts'
 import { executorLoad, ticketDetail, ticketList } from '../src/app/views/tickets.ts'
 
+/** Tests below spawn or expect POSIX-only pieces. The expectation spells a POSIX credential-helper path; a Windows path needs git's backslash escaping, covered by the environment tests. */
+const POSIX_ONLY = process.platform === 'win32'
+
 let runtime: Runtime
 const viewsOf = (value: Runtime) => ({ store: value.store, sources: value.sources, links: value.links() })
 const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem ?? value.feishuProblem)
@@ -973,7 +976,7 @@ it('runs setup again while the Feishu bot check failed, and restores the process
   expect(process.env.PATH?.split(':')).not.toContain(join(directory, 'worker-bin'))
 })
 
-it('writes worker shims and the agent environment from the configuration only, and restores the environment on stop', async () => {
+it.skipIf(POSIX_ONLY)('writes worker shims and the agent environment from the configuration only, and restores the environment on stop', async () => {
   const bin = join(directory, 'worker-bin')
   expect(readdirSync(bin).sort()).toEqual(['gh', 'lark-cli'])
   expect(readFileSync(join(bin, 'lark-cli'), 'utf8')).toContain(`exec '${BOT()}'`)

@@ -9,6 +9,9 @@ import { SourceRegistry } from '../src/sources/registry.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import { key, type OutboundMessage } from '../src/core/index.ts'
 import { testDeployment } from './fixtures/deployment.ts'
+
+/** Tests below spawn or expect POSIX-only pieces. The stand-in CLIs are #!/bin/sh scripts the product spawns directly, and Windows cannot execute a shebang file. */
+const POSIX_ONLY = process.platform === 'win32'
 const sources = new SourceRegistry(() => SettingsSchema.parse({}))
 sources.register(feishuKind); sources.register(githubKind)
 const send = (commands: Commands, message: OutboundMessage) => sources.send(message, commands)
@@ -21,7 +24,7 @@ describe('account-isolated operations', () => {
     await commands.gh(['api','some-path','-f','body=`whoami` $(touch x)'])
     expect(run).toHaveBeenCalledWith('/path/agent-gh', ['api','some-path','-f','body=`whoami` $(touch x)'])
   })
-  it('runs every command with its environment over the process environment, where undefined removes a variable', async () => {
+  it.skipIf(POSIX_ONLY)('runs every command with its environment over the process environment, where undefined removes a variable', async () => {
     process.env.GH_TOKEN = 'personal'
     try {
       const output = await new Commands(() => deployment, { GH_TOKEN: undefined, DSH_SUPERAGENT_PROBE: 'agent' }, new AbortController().signal).run('env', [])
@@ -169,7 +172,7 @@ it('says how to add the bot to a chat when Feishu answers that it is not a membe
   run.mockResolvedValueOnce(JSON.stringify({ ok: false, error: { code: 232011, message: 'operator is not in the chat' } }))
   await expect(commands.lark(['im', '+chat-members-list'])).rejects.toMatchObject({ message: hint, code: 232011 })
 })
-it('names only the program and how it ended when a command prints no diagnostics, never its arguments', async () => {
+it.skipIf(POSIX_ONLY)('names only the program and how it ended when a command prints no diagnostics, never its arguments', async () => {
   const commands = new Commands(() => deployment, {}, new AbortController().signal)
   const secret = 'secret reply text'
   await expect(commands.run('sh', ['-c', 'exit 3', secret])).rejects.toMatchObject({ message: 'sh exited with code 3', exitCode: 3 })
@@ -181,7 +184,7 @@ it('names only the program and how it ended when a command prints no diagnostics
   expect(commandError(timedOut, '/path/lark-bot')).toMatchObject({ message: 'lark-bot timed out after 90 s' })
   expect(String(commandError(timedOut, '/path/lark-bot'))).not.toContain('withdrawn')
 })
-it('reports failures as CliError with the code the CLI names and the exit status', async () => {
+it.skipIf(POSIX_ONLY)('reports failures as CliError with the code the CLI names and the exit status', async () => {
   const notFound = commandError({ stderr: 'gh: Not Found (HTTP 404)\n', code: 1 })
   expect(notFound).toBeInstanceOf(CliError)
   expect(notFound).toMatchObject({ message: 'gh: Not Found (HTTP 404)', code: 404, exitCode: 1 })
@@ -199,7 +202,7 @@ it('reports failures as CliError with the code the CLI names and the exit status
   await expect(commands.lark(['im', '+messages-reply'])).rejects.toMatchObject({ message: 'message not found (231003)', code: 231003 })
 })
 
-it('stops a running command when the signal of its work aborts, or the lifetime, and leaves the other work running', async () => {
+it.skipIf(POSIX_ONLY)('stops a running command when the signal of its work aborts, or the lifetime, and leaves the other work running', async () => {
   const lifetime = new AbortController(), work = new AbortController()
   const commands = new Commands(() => deployment, {}, lifetime.signal)
   const started = Date.now()
