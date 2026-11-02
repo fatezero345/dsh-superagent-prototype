@@ -1,0 +1,59 @@
+name: CI
+
+# Runs the repository's own checks on Linux.
+#
+# Why Linux and not Windows: the suite spawns POSIX helpers (for example
+# `sleep 60` in tests/service-script.spec.ts) and signals child processes, so on
+# Windows 42 of 1197 tests fail with `spawn sleep ENOENT` / `EPERM` while the
+# product itself is fine. Linux is where these checks are meaningful.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # tsdown needs more than Node's default old-space during `pnpm build`.
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  check:
+    name: typecheck / test / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Some suites inspect history and worktrees.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Git identity
+        # Tests that create commits need an identity; the repo config forbids
+        # relying on a global one, so it is set explicitly here.
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@example.invalid"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
