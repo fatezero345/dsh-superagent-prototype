@@ -37,9 +37,11 @@ function Get-State {
 
 function Get-LivePids {
   # Only the DSH service process counts: the `cmd` shim that Start-Process records stays alive as its parent.
-  $pattern = 'bin\.js'
+  # DSH-X spawns `bin.js <profile> --host … --port …`; this script spawns `--profile <profile>`; accept both.
+  $name = [regex]::Escape($Profile)
+  $pattern = '(?:--profile\s+' + $name + '|bin\.js\s+"?' + $name + '(?=\s|$))'
   $found = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -eq 'DSH.exe' -and $_.CommandLine -match $pattern -and $_.CommandLine -notmatch 'runner\.js' -and $_.CommandLine -match ('--profile\s+' + [regex]::Escape($Profile)) } |
+    Where-Object { $_.Name -eq 'DSH.exe' -and $_.CommandLine -match 'bin\.js' -and $_.CommandLine -notmatch 'runner\.js' -and $_.CommandLine -match $pattern } |
     ForEach-Object { [int]$_.ProcessId }
   return @($found | Select-Object -Unique)
 }
@@ -148,8 +150,16 @@ function Start-Service {
 }
 
 function Stop-Service([bool]$Intentional) {
-  if ($Intentional) { Set-Content -Path $StopMarker -Value ((Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')) }
   $pids = Get-LivePids
+  # Only an instance this script started (its pid is the one recorded) is ours to stop; DSH-X owns the rest.
+  $owned = $false
+  if (Test-Path $PidFile) {
+    try { $recorded = [int](Get-Content $PidFile -Raw); $owned = $pids -contains $recorded } catch { $owned = $false }
+  }
+  if ($pids.Count -gt 0 -and -not $owned) {
+    throw "The running instance was started by the DSH-X launcher (PID $($pids -join ', ')); stop it from DSH-X instead."
+  }
+  if ($Intentional) { Set-Content -Path $StopMarker -Value ((Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')) }
   foreach ($p in $pids) {
     Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
   }
