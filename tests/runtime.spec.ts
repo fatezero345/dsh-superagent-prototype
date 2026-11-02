@@ -171,9 +171,12 @@ beforeEach(async () => {
       agentCtx.reflect.provide('tools', { register: (tool: RegisteredTool) => { sessionTools.set(tool.name,
         tool); return () => sessionTools.delete(tool.name) },
         // Preset tools are inherited; subagent is registered on the agent itself and cannot be named by restrict.
+        // Preset tools are inherited, and the profile's tools are the global view; `subagent` is registered on the agent
+        // itself and cannot be named by restrict.
         get: (name: string, scope?: object) => {
           const own = scope === agents.get(sessionId)
-          return (scope === preset || own) && inherited.includes(name) || own && name === 'subagent' ? { name } : undefined
+          const reachable = scope === undefined || scope === preset || own
+          return reachable && inherited.includes(name) || own && name === 'subagent' ? { name } : undefined
         },
         restrict: vi.fn((rule: { allow: string[] }) => {
           if (rule.allow.some(name => !inherited.includes(name))) throw new Error('Restriction names a non-inherited tool')
