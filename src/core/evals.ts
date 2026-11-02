@@ -30,7 +30,7 @@ export class Evals extends EnginePart {
   /**
    * Expire a Thread's Eval past its deadline (see `expire`), unless processing is paused: then the Eval notes when the
    * processing pause began, and once processing resumes its deadline moves forward by the pause's length. An Eval whose
-   * candidate has not reached the assessor's Session does not expire.
+   * candidate has not reached the assessor's Session does not expire, so a slow assessor start is not killed.
    */
   due(thread: Thread, policy: Policy): void {
     const evaluation = thread.evaluating
@@ -56,10 +56,16 @@ export class Evals extends EnginePart {
   /**
    * An Eval past its deadline queues its Triggers again for a fresh Eval, up to `REQUEUES` times in a row, so a busy
    * assessor does not drop requests; after that it is recorded unavailable.
+   *
+   * The recorded reason carries how many deadline windows the assessor burned (`attempts`), which the Decision used to
+   * omit: a request that timed out after three full windows looked exactly like one that timed out once.
    */
   private expire(thread: Thread): void {
     const expired = (thread.expired ?? 0) + 1
-    if (expired > REQUEUES) { this.finish(thread, thread.evaluating!, { kind: 'unavailable', reason: [{ code: 'timeout' }] }); return }
+    if (expired > REQUEUES) {
+      this.finish(thread, thread.evaluating!, { kind: 'unavailable', reason: [{ code: 'timeout', values: { attempts: String(expired) } }] })
+      return
+    }
     const { id, triggerIds } = thread.evaluating!
     delete thread.evaluating
     thread.expired = expired

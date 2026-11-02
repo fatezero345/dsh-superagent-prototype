@@ -175,9 +175,10 @@ describe('eval', () => {
     expect(h.requests.map(item => item.triggers.map(each => each.id))).toEqual([['1'], ['1']])
     deliver(); h.tick(61); h.pump()
     expect(h.requests).toHaveLength(3)
-    // The third expiry is recorded unavailable.
+    // The third expiry is recorded unavailable, and says how many deadline windows the assessor burned.
     deliver(); h.tick(61); h.pump()
-    expect(h.repo.decisions.byThread('chat:t1')).toEqual([expect.objectContaining({ kind: 'unavailable', reason: [{ code: 'timeout' }] })])
+    expect(h.repo.decisions.byThread('chat:t1')).toEqual([expect.objectContaining({ kind: 'unavailable',
+      reason: [{ code: 'timeout', values: { attempts: '3' } }] })])
     expect(h.repo.threads.get('chat:t1')).toMatchObject({ pending: [] })
     expect(h.repo.threads.get('chat:t1')).not.toHaveProperty('evaluating')
     expect(h.repo.threads.get('chat:t1')).not.toHaveProperty('expired')
