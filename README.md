@@ -34,6 +34,8 @@ Read the numbered documents in order; each builds only on the ones before it.
 
 `pnpm check` runs the typecheck, the tests and the build.
 
+The build targets Node.js 22.19.0 or later on the 22.x line, or 24.0.0 or later — the `engines.node` range `^22.19.0 || >=24.0.0` in `package.json` — and emits the `es2024` target set in `tsdown.config.ts`.
+
 ## License
 
 [MIT](LICENSE)
